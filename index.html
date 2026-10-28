@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reto Shodan — Nunsys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pink:#E6007E;
+    --pink-dark:#B5005F;
+    --pink-light:#FCEAF3;
+    --ink:#1A1A1A;
+    --ink-soft:#4A4A4A;
+    --paper:#FFFFFF;
+    --floor:#FAF9FA;
+    --line:#ECE4E9;
+    --good:#16A34A;
+    --good-bg:#EAF9EF;
+    --code-bg:#0D1117;
+    --code-line:#1C2230;
+    --code-text:#E6EDF3;
+    --radius:18px;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#F2F0F1; --ink-soft:#C9C3C7; --paper:#17151A; --floor:#111013; --line:#2C2830;
+      --pink-light:#2B1522;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#F2F0F1; --ink-soft:#C9C3C7; --paper:#17151A; --floor:#111013; --line:#2C2830;
+    --pink-light:#2B1522;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--floor); color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    padding-top:var(--safe-top); padding-bottom:var(--safe-bottom);
+    min-height:100%;
+  }
+  h1,h2,h3,.display{ font-family:'Space Grotesk',sans-serif; letter-spacing:-0.01em; }
+  button{ font-family:inherit; cursor:pointer; }
+  .app{ display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:14px 22px; background:var(--paper);
+    border-bottom:1px solid var(--line); position:sticky; top:var(--safe-top); z-index:20;
+    flex-wrap:wrap; row-gap:10px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--pink); }
+  .progress{ display:flex; gap:6px; flex-wrap:nowrap; justify-content:center; overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; }
+  .progress button{
+    width:30px; height:30px; border-radius:50%; border:1.5px solid var(--line); flex:none;
+    background:var(--paper); color:var(--ink-soft); font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  @media (max-width:640px){
+    .topbar{ padding:12px 16px; }
+    .progress{ order:3; width:100%; justify-content:flex-start; padding-bottom:2px; }
+  }
+  .progress button.active{ background:var(--pink); border-color:var(--pink); color:#fff; }
+  .progress button.done{ border-color:var(--pink); color:var(--pink); }
+  .reset-link{ background:none; border:none; color:var(--ink-soft); font-size:13px; text-decoration:underline; padding:6px; }
+
+  /* ---------- layout ---------- */
+  .layout{ flex:1; display:grid; grid-template-columns: 1fr 300px; gap:0; }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } .scoreboard{ order:3; } }
+
+  .stage{ padding:36px clamp(20px,4vw,56px) 60px; display:flex; flex-direction:column; gap:22px; }
+  .kicker{ color:var(--pink); font-weight:700; font-size:14px; }
+  .kicker b{ font-weight:700; }
+  .prompt-card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    padding:clamp(22px,3vw,36px); box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .prompt-text{ font-size:clamp(20px,2.6vw,28px); line-height:1.35; font-weight:600; }
+  .hint{ margin-top:14px; color:var(--ink-soft); font-size:15px; }
+
+  .code-block{
+    background:var(--code-bg); border-radius:14px; padding:6px 0; overflow:hidden;
+    font-family:'JetBrains Mono',monospace; font-size:clamp(14px,1.6vw,16.5px);
+  }
+  .code-line{
+    display:flex; align-items:flex-start; gap:14px; padding:10px 20px;
+    border-left:4px solid transparent; color:var(--code-text); white-space:pre;
+    overflow-x:auto;
+  }
+  .code-line .ln{ color:#6E7681; user-select:none; width:1.4em; flex:none; }
+  .code-line .tag{
+    flex:none; width:24px; height:24px; border-radius:6px; background:#222938; color:#9aa4b2;
+    font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center;
+  }
+  .code-line.selectable{ cursor:pointer; }
+  .code-line.selectable:hover{ background:#161B22; }
+  .code-line.picked{ border-left-color:var(--pink); background:#1C1020; }
+  .code-line.correct{ border-left-color:var(--good); background:#0E2016; }
+  .code-line.correct .tag{ background:var(--good); color:#fff; }
+  .code-line.picked .tag{ background:var(--pink); color:#fff; }
+  .code-line.wrong-pick{ border-left-color:#E05252; }
+
+  .options-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
+  .opt-btn{
+    text-align:left; padding:14px 16px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--paper); color:var(--ink); font-size:15px; font-weight:500; display:flex; gap:10px; align-items:flex-start;
+    transition:.12s;
+  }
+  .opt-btn .tag{ flex:none; width:22px; height:22px; border-radius:6px; background:var(--pink-light); color:var(--pink); font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center; }
+  .opt-btn:hover{ border-color:var(--pink); }
+  .opt-btn.picked{ border-color:var(--pink); background:var(--pink-light); }
+  .opt-btn.correct{ border-color:var(--good); background:var(--good-bg); }
+  .opt-btn.correct .tag{ background:var(--good); color:#fff; }
+
+  .reveal-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .btn{
+    border:none; border-radius:999px; padding:13px 26px; font-weight:700; font-size:15px;
+    background:var(--ink); color:#fff; transition:.12s;
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn.primary{ background:var(--pink); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--line); }
+  .btn:disabled{ opacity:.4; cursor:default; }
+
+  .answer-box{
+    display:none; background:var(--good-bg); border:1px solid #BFE6CC; border-radius:14px; padding:18px 20px;
+    font-size:15.5px; line-height:1.5;
+  }
+  .answer-box.show{ display:block; }
+  .answer-box .label{ color:var(--good); font-weight:700; font-size:13px; margin-bottom:6px; display:block; }
+  .answer-box code{ background:rgba(0,0,0,.06); padding:2px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+
+  .timer-wrap{ display:flex; align-items:center; gap:12px; }
+  .timer{
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:22px;
+    background:var(--paper); border:1.5px solid var(--line); border-radius:12px; padding:8px 16px; min-width:84px; text-align:center;
+  }
+  .timer.low{ color:#D64545; border-color:#D64545; }
+  .timer-btn{ width:40px; height:40px; border-radius:10px; border:1.5px solid var(--line); background:var(--paper); font-size:16px; }
+
+  .footer-nav{ display:flex; justify-content:space-between; margin-top:auto; padding-top:10px; }
+
+  /* ---------- scoreboard ---------- */
+  .scoreboard{
+    border-left:1px solid var(--line); background:var(--paper); padding:26px 22px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  @media (max-width:860px){ .scoreboard{ border-left:none; border-top:1px solid var(--line); } }
+  .scoreboard h3{ margin:0 0 4px; font-size:13px; letter-spacing:.04em; color:var(--ink-soft); font-weight:700; }
+  .team-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 14px; border-radius:12px; background:var(--floor);
+  }
+  .team-row .name{ font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px; min-width:0; }
+  .team-row .name span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .swatch{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .score-ctrl{ display:flex; align-items:center; gap:8px; }
+  .score-ctrl .val{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; min-width:26px; text-align:center; }
+  .score-ctrl button{
+    width:28px; height:28px; border-radius:8px; border:1.5px solid var(--line); background:var(--paper);
+    font-weight:700; color:var(--ink); line-height:1;
+  }
+  .score-ctrl button.plus{ border-color:var(--pink); color:var(--pink); }
+
+  /* ---------- setup screen ---------- */
+  .setup{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 20px; }
+  .setup-card{ width:100%; max-width:560px; background:var(--paper); border:1px solid var(--line); border-radius:24px; padding:clamp(28px,5vw,44px); }
+  .setup-card h1{ font-size:clamp(26px,4vw,34px); margin:0 0 8px; }
+  .setup-card .lead{ color:var(--ink-soft); font-size:15.5px; margin-bottom:26px; line-height:1.5; }
+  .mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  @media (max-width:480px){ .mode-grid{ grid-template-columns:1fr; } }
+  .mode-card{
+    border:1.5px solid var(--line); border-radius:16px; padding:16px; text-align:left; background:var(--paper);
+  }
+  .mode-card.active{ border-color:var(--pink); background:var(--pink-light); }
+  .mode-card .n{ font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pink); font-weight:700; }
+  .mode-card h4{ margin:4px 0 4px; font-size:16px; }
+  .mode-card p{ margin:0; font-size:13.5px; color:var(--ink-soft); line-height:1.4; }
+  .team-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .team-input-row{ display:flex; gap:8px; }
+  .team-input-row input{
+    flex:1; padding:12px 14px; border-radius:10px; border:1.5px solid var(--line); font-size:15px;
+    background:var(--paper); color:var(--ink); font-family:inherit;
+  }
+  .team-input-row input:focus{ outline:none; border-color:var(--pink); }
+  .team-input-row button{ width:40px; border-radius:10px; border:1.5px solid var(--line); background:var(--paper); color:#D64545; font-weight:700; }
+  .add-team{ background:none; border:1.5px dashed var(--line); border-radius:10px; padding:11px; color:var(--ink-soft); font-weight:600; font-size:14px; }
+  .start-btn{ width:100%; padding:16px; font-size:16px; }
+
+  /* ---------- end screen ---------- */
+  .end{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 20px; }
+  .end-card{ text-align:center; max-width:520px; }
+  .end-card .trophy{ font-size:52px; margin-bottom:6px; }
+  .end-card h1{ font-size:clamp(26px,4vw,32px); margin:0 0 6px; }
+  .end-card .winner{ color:var(--pink); font-weight:700; }
+  .final-rank{ margin:26px 0; display:flex; flex-direction:column; gap:8px; }
+  .final-row{ display:flex; justify-content:space-between; padding:12px 18px; border-radius:12px; background:var(--paper); border:1px solid var(--line); font-weight:600; }
+  .final-row:first-child{ border-color:var(--pink); background:var(--pink-light); }
+
+  .visually-hidden{ position:absolute; width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0); }
+
+  .answer-form{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .answer-form select{
+    padding:12px 12px; border-radius:12px; border:1.5px solid var(--line); background:var(--paper); color:var(--ink);
+    font-family:inherit; font-size:15px; font-weight:600;
+  }
+  .answer-form input{
+    flex:1; min-width:240px; padding:13px 16px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--paper); color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:15px;
+  }
+  .answer-form input:focus, .answer-form select:focus{ outline:none; border-color:var(--pink); }
+  .feedback{ display:none; border-radius:12px; padding:12px 16px; font-size:15px; font-weight:600; align-items:center; gap:12px; flex-wrap:wrap; }
+  .feedback.show{ display:flex; }
+  .feedback.ok{ background:var(--good-bg); color:#15803D; border:1px solid #BFE6CC; }
+  .feedback.bad{ background:#FDEEEE; color:#B42318; border:1px solid #F4C7C3; }
+  .feedback .btn{ padding:8px 16px; font-size:14px; }
+  .hint-box{
+    background:var(--pink-light); border:1px solid #F3BCD9; border-radius:14px; padding:16px 20px; font-size:16px; line-height:1.5;
+  }
+  .hint-box .label{ color:var(--pink); font-weight:800; font-size:12px; letter-spacing:.05em; display:block; margin-bottom:4px; }
+  .btn.link{ background:none; color:var(--ink-soft); font-weight:600; text-decoration:underline; padding:13px 8px; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .feedback.bad{ background:#3a1517; color:#ffb4ae; border-color:#5a2226; } }
+
+  .layout{ display:block; max-width:980px; width:100%; margin:0 auto; }
+  .stage{ padding:34px clamp(18px,4vw,40px) 60px; }
+
+  .progress button.ok{ background:#16A34A; border-color:#16A34A; color:#fff; }
+  .progress button.bad{ border-color:#D64545; color:#D64545; }
+  .end{ align-items:flex-start; padding-top:40px; }
+  .end-card.result{ max-width:760px; width:100%; text-align:left; }
+  .score-big{ font-family:'Space Grotesk',sans-serif; font-size:72px; line-height:1; margin:6px 0 14px; }
+  .score-big b{ color:var(--pink); } .score-big span{ font-size:32px; color:var(--ink-soft); font-weight:500; }
+  .score-bar{ height:12px; background:var(--line); border-radius:99px; overflow:hidden; }
+  .score-fill{ height:100%; background:var(--pink); border-radius:99px; }
+  .verdict{ font-size:18px; font-weight:600; margin:18px 0 4px; }
+  .score-detail{ color:var(--ink-soft); font-size:15px; margin:0 0 6px; }
+  .end-card.result h2{ font-size:20px; margin:30px 0 12px; }
+  .review-item{ background:var(--paper); border:1px solid var(--line); border-left:4px solid #D64545; border-radius:14px; padding:16px 18px; margin-bottom:12px; font-size:15px; line-height:1.5; }
+  .r-title{ color:var(--pink); font-weight:800; font-size:12px; letter-spacing:.04em; margin-bottom:4px; }
+  .r-prompt{ font-weight:600; margin-bottom:10px; }
+  .r-line{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin-bottom:6px; }
+  .r-line > span{ color:var(--ink-soft); font-size:13px; min-width:74px; font-weight:600; }
+  .r-line code{ background:rgba(0,0,0,.06); padding:2px 8px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13.5px; word-break:break-all; }
+  .r-exp{ margin-top:8px; color:var(--ink-soft); }
+  .r-exp code, .r-note code{ background:rgba(0,0,0,.06); padding:1px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+  .r-note{ color:#B42318; font-size:14px; margin-top:2px; }
+  .end-actions{ display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; }
+
+  .observe{ margin-top:14px; padding:12px 14px; background:rgba(0,0,0,.05); border-radius:12px; font-size:15px; line-height:1.5; }
+  .shodan-link{ color:var(--pink); font-weight:700; text-decoration:none; }
+  .shodan-link:hover{ text-decoration:underline; }
+  .feedback .shodan-link{ color:inherit; text-decoration:underline; }
+  .pre-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:18px 0 6px; }
+  .pre-grid div{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; font-size:14.5px; line-height:1.5; }
+  .pre-grid b{ display:block; color:var(--pink); margin-bottom:4px; font-size:12.5px; letter-spacing:.03em; }
+  .end-card.result .lead{ font-size:17px; line-height:1.55; color:var(--ink-soft); margin:8px 0; }
+  .end-card.result h1{ font-size:clamp(26px,4.5vw,36px); margin:4px 0 6px; }
+  @media (max-width:700px){ .pre-grid{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var UVNET = "147.156.0.0/16";
+  var ROUNDS = [
+    {
+      id:1, title:"Shodan · Ronda 1",
+      prompt:"Encuentra todo lo que Shodan sabe de la UV a partir de su nombre de dominio: uv.es.",
+      hint:"Hay un filtro que busca en el nombre de host o de dominio asociado a cada IP.",
+      rules:[/hostname:"?\.?uv\.es/],
+      answer:"hostname:uv.es",
+      explanation:"<code>hostname:</code> filtra por el nombre de host o dominio asociado a la IP (DNS inverso y certificados). Es la forma más rápida de ver la huella pública de una organización que tiene dominio propio.",
+      observe:"Cuántos resultados salen y, sobre todo, las estadísticas del panel izquierdo: puertos más frecuentes, organizaciones y productos. Esa foto general dice más que cualquier resultado suelto."
+    },
+    {
+      id:2, title:"Shodan · Ronda 2",
+      prompt:"La UV tiene asignado el bloque de red 147.156.0.0/16. Busca todo lo que Shodan ve dentro de ese rango.",
+      hint:"Hay un filtro para rangos de red en notación CIDR (IP/máscara).",
+      rules:[/net:\s*147\.156\.0\.0\/16/],
+      answer:"net:147.156.0.0/16",
+      explanation:"<code>net:</code> busca por rango de IPs en notación CIDR. A diferencia de <code>hostname:</code>, no importa el nombre sino a quién pertenecen las direcciones, así que aparecen también máquinas sin nombre DNS. Un /16 son 65.536 direcciones.",
+      observe:"Compara el número de resultados con el de la ronda 1: ¿por qué no coinciden? Piensa en máquinas sin nombre, en servicios de la UV alojados fuera de su rango y en IPs de la UV que Shodan no haya escaneado."
+    },
+    {
+      id:3, title:"Shodan · Ronda 3",
+      prompt:"Encuentra los servicios que presentan un certificado SSL emitido para uv.es (en cualquiera de sus subdominios).",
+      hint:"Hay un filtro específico para el nombre común (CN) del sujeto del certificado.",
+      rules:[/(ssl\.cert\.subject\.cn|ssl):\s*"?\*?\.?uv\.es/],
+      answer:"ssl.cert.subject.cn:uv.es",
+      explanation:"<code>ssl.cert.subject.cn:</code> encuentra servicios por el nombre de su certificado. Sirve para descubrir sistemas de la organización que no tienen un nombre DNS inverso claro, o que están fuera de su rango de red. También se puede usar <code>ssl:\"uv.es\"</code>.",
+      observe:"Mira los subdominios que revelan los certificados y compáralos con los de la ronda 1. Cada nombre nuevo es una pieza más de la superficie expuesta. Fíjate también en el emisor y en las fechas de caducidad."
+    },
+    {
+      id:4, title:"Shodan · Ronda 4",
+      prompt:"¿Qué máquinas de la red de la UV (147.156.0.0/16) tienen SSH accesible desde Internet?",
+      hint:"Combina el filtro de red con el de puerto. SSH usa por defecto el puerto 22.",
+      rules:[/net:\s*147\.156\.0\.0\/16|hostname:"?\.?uv\.es/, /port:\s*22\b|\bssh\b/],
+      answer:"net:147.156.0.0/16 port:22",
+      explanation:"Combinar filtros afina la búsqueda. SSH expuesto a Internet no es un fallo por sí mismo, pero cada servicio de administración accesible es superficie de ataque (fuerza bruta, versiones sin parchear). Lo habitual es limitarlo a la VPN o a IPs concretas.",
+      observe:"El banner de cada resultado: versión de OpenSSH y sistema operativo. ¿Alguna versión antigua? ¿Cuántas máquinas tienen SSH abierto frente a las que tienen web? Solo observa: no te conectes."
+    },
+    {
+      id:5, title:"Shodan · Ronda 5",
+      prompt:"Dentro de la red de la UV, encuentra solo los servidores web que usan Apache.",
+      hint:"El filtro de producto reconoce el software por su banner. Apache aparece como «Apache httpd».",
+      rules:[/net:\s*147\.156\.0\.0\/16|hostname:"?\.?uv\.es/, /product:\s*"?apache/],
+      answer:'net:147.156.0.0/16 product:"Apache httpd"',
+      explanation:"<code>product:</code> filtra por el software identificado en el banner. Con <code>version:</code> se pueden localizar las versiones antiguas: <code>product:\"Apache httpd\" version:\"2.2\"</code>. Es la base de un inventario externo de software.",
+      observe:"El número de versión de cada Apache. ¿Alguno fuera de soporte? Ojo: un banner puede ser falso o estar parcheado por la distribución sin cambiar el número de versión, así que hay que verificarlo antes de afirmar que algo es vulnerable."
+    },
+    {
+      id:6, title:"Shodan · Ronda 6",
+      prompt:"Busca los servicios de la UV (por su nombre uv.es) expuestos en puertos que NO sean los web habituales, el 80 y el 443.",
+      hint:"Para excluir se antepone un signo menos, y varios valores de un mismo filtro se separan con comas.",
+      rules:[/hostname:"?\.?uv\.es/, /-port:\s*80,\s*443|-port:\s*443,\s*80|-port:\s*80\b.*-port:\s*443|-port:\s*443\b.*-port:\s*80/],
+      answer:"hostname:uv.es -port:80,443",
+      explanation:"Los puertos distintos de 80 y 443 son los que más interesan en una auditoría: administración, bases de datos, servicios internos. Es la forma de buscar «lo raro». La coma significa «o» dentro de un filtro y el signo menos lo niega.",
+      observe:"El panel de «Top Ports»: ¿qué puertos aparecen? ¿Hay servicios que deberían vivir solo en la red interna? Es el tipo de hallazgo que acaba en un informe de auditoría."
+    },
+    {
+      id:7, title:"Shodan · Ronda 7",
+      prompt:"Ahora, fuera de la UV: encuentra servicios en España cuyo certificado SSL esté caducado.",
+      hint:"Hay un filtro de certificado que indica si ha caducado (verdadero o falso) y otro de país con el código de dos letras.",
+      rules:[/ssl\.cert\.expired:\s*true/, /country:\s*"?es"?/],
+      answer:"ssl.cert.expired:true country:ES",
+      explanation:"Un certificado caducado es un síntoma de infraestructura descuidada, y la infraestructura descuidada suele estar sin parchear. Un atacante lo usa para priorizar objetivos.",
+      observe:"Qué tipo de organizaciones aparecen (empresas, ayuntamientos, universidades) y cuánto hace que caducó cada certificado. Solo observa: son sistemas de terceros."
+    },
+    {
+      id:8, title:"Shodan · Ronda 8",
+      prompt:"Encuentra servidores web en España que muestren un listado de directorios abierto («Index of /»).",
+      hint:"Es el mismo concepto que en el reto OSINT, pero ahora buscando en el título HTTP que ve Shodan y filtrando por país.",
+      rules:[/http\.title:\s*"?index of/, /country:\s*"?es"?/],
+      answer:'http.title:"Index of /" country:ES',
+      explanation:"Es el mismo hallazgo que con Google (<code>intitle:\"index of\"</code>), pero visto desde la red: Shodan localiza servidores concretos con el listado activado, aunque Google no los haya rastreado.",
+      observe:"El título y el banner de cada resultado. No abras ni descargues nada de servidores ajenos: los hallazgos típicos son copias de seguridad, logs y ficheros de configuración."
+    }
+  ];
+
+  var KEY = "nunsys-reto-shodan-v1";
+  function fresh(){ return {screen:"intro", current:0, revealed:{}, hinted:{}, typed:{}}; }
+  function shodanUrl(q){ return "https://www.shodan.io/search?query=" + encodeURIComponent(q); }
+  var state = fresh();
+
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw){ var s = JSON.parse(raw); if(s && s.typed){ state = s; } }
+  }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+
+  var root = document.getElementById("app");
+  function el(tag, cls, html){ var e = document.createElement(tag); if(cls) e.className = cls; if(html !== undefined) e.innerHTML = html; return e; }
+  function escapeHtml(s){ return s.replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function norm(s){
+    return (s||"").toLowerCase()
+      .replace(/[\u201c\u201d\u201e\u00ab\u00bb]/g,'"').replace(/[\u2018\u2019]/g,"'")
+      .replace(/:\s+/g,":").replace(/\s+/g," ").trim();
+  }
+  function check(round, text){
+    var n = norm(text);
+    if(!n) return false;
+    return round.rules.every(function(r){ return r.test(n); });
+  }
+
+  function counted(r){ var t = state.typed[r.id]; return !!(t && t.okAt && !t.okAt.revealed); }
+  function clean(r){ var t = state.typed[r.id]; return counted(r) && !t.okAt.hinted; }
+
+  function render(){
+    root.innerHTML = "";
+    if(state.screen === "intro") renderIntro(); else if(state.screen === "end") renderEnd(); else renderPlay();
+    save();
+  }
+
+  function renderPlay(){
+    var app = el("div","app");
+
+    var top = el("div","topbar");
+    top.appendChild(el("div","brand","<span class='dot'></span> Reto Shodan"));
+    var prog = el("div","progress");
+    ROUNDS.forEach(function(r, i){
+      var b = document.createElement("button");
+      b.textContent = i+1;
+      b.setAttribute("aria-label","Ir a la ronda " + (i+1));
+      if(i === state.current) b.className = "active";
+      else if(counted(r)) b.className = "ok";
+      else if(state.revealed[r.id]) b.className = "bad";
+      b.addEventListener("click", function(){ state.current = i; render(); });
+      prog.appendChild(b);
+    });
+    top.appendChild(prog);
+    var reset = el("button","reset-link","Reiniciar");
+    reset.addEventListener("click", function(){
+      if(confirm("¿Borrar tu progreso y empezar de nuevo?")){ state = fresh(); render(); }
+    });
+    top.appendChild(reset);
+    app.appendChild(top);
+
+    var layout = el("div","layout");
+    layout.appendChild(renderStage());
+    app.appendChild(layout);
+    root.appendChild(app);
+  }
+
+  function renderStage(){
+    var round = ROUNDS[state.current];
+    var stage = el("div","stage");
+    stage.appendChild(el("div","kicker","Ronda " + (state.current+1) + " de " + ROUNDS.length + " &nbsp;\u00b7&nbsp; <b>" + round.title + "</b>"));
+
+    var card = el("div","prompt-card");
+    card.appendChild(el("div","prompt-text", round.prompt));
+    card.appendChild(el("div","hint","Escribe abajo tu búsqueda de Shodan y pulsa Comprobar. Si te atascas, pide una pista."));
+    stage.appendChild(card);
+
+    // answer form
+    var t = state.typed[round.id] || (state.typed[round.id] = {text:"", ok:null});
+    var form = el("div","answer-form");
+    var input = document.createElement("input");
+    input.type = "text"; input.value = t.text || "";
+    input.placeholder = "Escribe aquí tu búsqueda…";
+    input.setAttribute("autocomplete","off"); input.setAttribute("spellcheck","false"); input.setAttribute("autocapitalize","off");
+    input.addEventListener("input", function(){ t.text = input.value; });
+    var btn = el("button","btn primary","Comprobar");
+    function doCheck(){
+      t.text = input.value;
+      var ok = t.text.trim() ? check(round, t.text) : "empty";
+      if(ok === true && !t.okAt){ t.okAt = {hinted: !!state.hinted[round.id], revealed: !!state.revealed[round.id]}; }
+      t.ok = ok; render();
+    }
+    btn.addEventListener("click", doCheck);
+    input.addEventListener("keydown", function(e){ if(e.key === "Enter"){ doCheck(); } });
+    form.appendChild(input); form.appendChild(btn);
+    stage.appendChild(form);
+
+    if(t.ok === true){
+      stage.appendChild(el("div","feedback ok show", (t.okAt && t.okAt.revealed)
+        ? "<span>\u2713 Esa búsqueda es correcta, pero ya habías visto la solución, así que no suma.</span>"
+        : "<span>\u2713 \u00a1Correcto! Esa búsqueda cumple lo que se pedía.</span> <a class='shodan-link' href='" + shodanUrl(t.text) + "' target='_blank' rel='noopener'>Ver los resultados en Shodan \u2197</a>"));
+    } else if(t.ok === "empty"){
+      stage.appendChild(el("div","feedback bad show","<span>Escribe primero tu búsqueda.</span>"));
+    } else if(t.ok === false){
+      stage.appendChild(el("div","feedback bad show","<span>\u2717 Todavía no cuadra. Puede faltar un operador, o ser otra forma válida. Sigue probando o pide la pista.</span>"));
+    }
+
+    var revealed = !!state.revealed[round.id];
+    var hinted = !!state.hinted[round.id];
+    if(hinted){
+      stage.appendChild(el("div","hint-box","<span class='label'>PISTA</span>" + round.hint));
+    }
+
+    var row = el("div","reveal-row");
+    if(!hinted && !revealed && t.ok !== true){
+      var hb = el("button","btn primary","Ver pista");
+      hb.addEventListener("click", function(){ state.hinted[round.id] = true; render(); });
+      row.appendChild(hb);
+      var skip = el("button","btn link","Mostrar la solución directamente");
+      skip.addEventListener("click", function(){ state.hinted[round.id] = true; state.revealed[round.id] = true; render(); });
+      row.appendChild(skip);
+    } else {
+      var sb = el("button","btn primary", revealed ? "Solución mostrada" : "Mostrar solución");
+      sb.disabled = revealed;
+      sb.addEventListener("click", function(){ state.revealed[round.id] = true; render(); });
+      row.appendChild(sb);
+    }
+    stage.appendChild(row);
+
+    var box = el("div","answer-box" + (revealed ? " show" : ""));
+    box.innerHTML = "<span class='label'>Solución</span><code>" + escapeHtml(round.answer) + "</code><div style='margin-top:10px'>" + round.explanation + "</div><div class='observe'><b>Qué mirar en los resultados</b><br>" + round.observe + "</div><div style='margin-top:12px'><a class='shodan-link' href='" + shodanUrl(round.answer) + "' target='_blank' rel='noopener'>Abrir esta búsqueda en Shodan \u2197</a></div>";
+    stage.appendChild(box);
+
+    var nav = el("div","footer-nav");
+    var prev = el("button","btn ghost","\u2190 Anterior");
+    prev.disabled = state.current === 0;
+    prev.addEventListener("click", function(){ state.current = Math.max(0, state.current-1); render(); });
+    var last = state.current === ROUNDS.length-1;
+    var next = el("button","btn", last ? "Terminar" : "Siguiente ronda \u2192");
+    next.addEventListener("click", function(){ if(last){ state.screen = "end"; } else { state.current++; } render(); });
+    nav.appendChild(prev); nav.appendChild(next);
+    stage.appendChild(nav);
+    return stage;
+  }
+
+  function verdict(n, total){
+    var p = n/total;
+    if(p >= 0.9) return "¡Excelente! Dominas los filtros de Shodan.";
+    if(p >= 0.7) return "Muy bien: tienes una base sólida. Repasa los fallos de abajo.";
+    if(p >= 0.5) return "Vas por buen camino. Repasa los comentarios de cada fallo.";
+    return "Toca repasar: mira las soluciones de abajo y vuelve a intentarlo.";
+  }
+
+  function renderIntro(){
+    var wrap = el("div","end");
+    var card = el("div","end-card result");
+    card.appendChild(el("div","kicker","Reto individual · 8 rondas"));
+    card.appendChild(el("h1",null,"Shodan: la UV vista desde fuera"));
+    card.appendChild(el("p","lead","Shodan no rastrea páginas web: pregunta a cada IP de Internet qué servicios tiene abiertos y guarda lo que responden (los <em>banners</em>). En este reto escribirás las búsquedas para ver cómo aparece la Universitat de València (uv.es) ante alguien que solo mira desde fuera, y después las abrirás en Shodan para analizar los resultados."));
+    var g = el("div","pre-grid");
+    g.innerHTML =
+      "<div><b>MEJOR CON UNA CUENTA</b>Sin iniciar sesión, Shodan enseña muy pocos resultados y, según el filtro, puede pedirte que entres (shodan.io). Con una cuenta gratuita ves más y puedes usar los filtros de este reto. Con un correo universitario, Shodan da gratis la membresía académica; si tu dominio no parece académico (.edu, .ac.uk…), hay que escribir a academic@shodan.io.</div>"+
+      "<div><b>SOLO OBSERVA</b>Es información pública, pero no te conectes a ningún servicio que encuentres, no pruebes contraseñas ni descargues nada. Si ves algo que te preocupa, avisa al equipo de seguridad.</div>"+
+      "<div><b>CÓMO FUNCIONA</b>Escribes la búsqueda, se comprueba aquí y, si aciertas, la abres en Shodan. Tras cada ronda hay una nota de qué mirar en los resultados, que es lo que de verdad se aprende.</div>";
+    card.appendChild(g);
+    var row = el("div","end-actions");
+    var go = el("button","btn primary","Empezar el reto");
+    go.addEventListener("click", function(){ state.screen = "play"; state.current = 0; render(); });
+    row.appendChild(go); card.appendChild(row);
+    wrap.appendChild(card); root.appendChild(wrap);
+  }
+
+  function renderEnd(){
+    var total = ROUNDS.length;
+    var okRounds = ROUNDS.filter(counted);
+    var n = okRounds.length;
+    var nClean = ROUNDS.filter(clean).length;
+
+    var wrap = el("div","end");
+    var card = el("div","end-card result");
+    card.appendChild(el("div","kicker","Resultado final"));
+    card.appendChild(el("div","score-big", "<b>" + n + "</b><span> / " + total + "</span>"));
+    var bar = el("div","score-bar"); var fill = el("div","score-fill"); fill.style.width = Math.round(n/total*100) + "%"; bar.appendChild(fill);
+    card.appendChild(bar);
+    card.appendChild(el("p","verdict", verdict(n, total)));
+    card.appendChild(el("p","score-detail", n + " acertadas" + (n ? " (" + nClean + " sin usar la pista)" : "") + ". " + (total - n) + " por mejorar."));
+
+    var missed = ROUNDS.filter(function(r){ return !counted(r); });
+    if(missed.length){
+      card.appendChild(el("h2",null,"Comentarios de los fallos"));
+      missed.forEach(function(r){
+        var t = state.typed[r.id] || {};
+        var item = el("div","review-item");
+        var tried = (t.text && t.text.trim()) ? "<div class='r-line'><span>Tu intento</span><code>" + escapeHtml(t.text.trim()) + "</code></div>" : "<div class='r-line'><span>Tu intento</span><em>sin intentar</em></div>";
+        var note = (t.okAt && t.okAt.revealed) ? "<div class='r-note'>La acertaste después de ver la solución, por eso no suma.</div>" : "";
+        item.innerHTML = "<div class='r-title'>" + r.title + "</div><div class='r-prompt'>" + r.prompt + "</div>" + tried +
+          "<div class='r-line'><span>Solución</span><code>" + escapeHtml(r.answer) + "</code></div>" + note +
+          "<div class='r-exp'>" + r.explanation + "</div>";
+        card.appendChild(item);
+      });
+    } else {
+      card.appendChild(el("p","verdict","Sin ningún fallo. Buen trabajo."));
+    }
+
+    var row = el("div","end-actions");
+    var review = el("button","btn primary","Revisar las rondas");
+    review.addEventListener("click", function(){ state.screen = "play"; state.current = 0; render(); });
+    var again = el("button","btn ghost","Empezar de nuevo");
+    again.addEventListener("click", function(){ state = fresh(); render(); });
+    row.appendChild(review); row.appendChild(again);
+    card.appendChild(row);
+    wrap.appendChild(card);
+    root.appendChild(wrap);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
